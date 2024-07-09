@@ -1,0 +1,125 @@
+eval 0 1
+merge
+endmerge 1
+binop
+eval 1 1
+endbinop 0 0 0 1 1 1
+merge
+endmerge 1
+binop
+eval 2 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+merge
+endmerge 1
+degree
+eval 3 0 0 1
+enddegree 1 1 12005215275863518093
+merge
+endmerge 1
+binop
+eval 4 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+merge
+endmerge 1
+degree
+eval 5 0 0 1
+enddegree 1 1 6538333409737925352
+merge
+endmerge 1
+degree
+eval 6 0 0 1
+enddegree 12005215275863518093 1 3623202527622834208
+merge
+endmerge 1
+binop
+eval 7 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+binop
+eval 8 1
+endbinop 0 0 0 1 1 1
+merge
+endmerge 1
+binop
+eval 9 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+binop
+eval 10 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+merge
+endmerge 1
+degree
+eval 11 1 0 0
+enddegree 1 1 7466735111159495236
+merge
+endmerge 1
+merge
+endmerge 1
+degree
+eval 12 0 0 1
+enddegree 1 1 9191140496616287506
+merge
+endmerge 1
+degree
+eval 13 0 0 1
+enddegree 6538333409737925352 1 12556156845658983011
+merge
+endmerge 1
+degree
+eval 14 0 0 1
+enddegree 3623202527622834208 1 12784758403481892869
+merge
+endmerge 1
+binop
+eval 15 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+degree
+eval 16 0 0 1
+enddegree 9191140496616287506 1 14626205555814282216
+merge
+endmerge 1
+degree
+eval 17 0 0 1
+enddegree 12784758403481892869 1 14569087327893359268
+merge
+endmerge 1
+binop
+eval 18 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+degree
+eval 19 1 18446744069414584320 1
+enddegree 14626205555814282216 1 1175889039830775847
+merge
+endmerge 6773023020787909177
+binop
+eval 20 1175889039830775847
+endbinop 1 -1 0 1 8957751159495624801 6773023020787909177
+merge
+endmerge 1175889039830775847 8957751159495624801
+leaf 1175889039830775847 1175889039830775847
+merge
+endmerge 1
+merge
+endmerge 1
+leaf 1 1
+merge
+endmerge 6374777637231406331
+binop
+eval 21 7466735111159495236
+endbinop 0 0 0 1 15341328512847530701 6374777637231406331
+merge
+endmerge 7466735111159495236 15341328512847530701
+leaf 7466735111159495236 7466735111159495236

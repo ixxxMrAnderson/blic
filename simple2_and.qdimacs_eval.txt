@@ -1,0 +1,12 @@
+BDD
+0 0 0 
+1 hash 0 0 1
+BDD
+0 0 0 
+1 hash 0 0 1
+BDD
+0 0 0 
+1 hash 0 0 1
+BDD
+0 0 0 
+1 hash 0 0 1

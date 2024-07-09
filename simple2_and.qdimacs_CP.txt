@@ -1,0 +1,26 @@
+eval 0 1
+merge
+endmerge 1
+binop
+eval 1 1
+endbinop 0 0 0 1 1 1
+merge
+endmerge 1
+binop
+eval 2 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+binop
+eval 3 1
+endbinop 0 1 1 -1 0 1
+merge
+endmerge 1
+merge
+endmerge 1
+leaf 1 1
+merge
+endmerge 1
+merge
+endmerge 1
+leaf 1 1
