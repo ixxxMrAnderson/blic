@@ -2,10 +2,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <cstdio>
-#include <fstream>
-#include <iostream>
-#include <vector>
-#include <string>
 
 #include "lib/global.hpp"
 #include "lib/os_linux.cpp"
@@ -23,9 +19,6 @@
 #include "verifier.cpp"
 #include "server.cpp"
 #include "smvparser.cpp"
-#include <filesystem>
-
-std::vector<std::string> myVector;
 
 void args_print_usage(Array_t<u8> arg0) {
     printf("Usage:\n  ");
@@ -205,9 +198,6 @@ void args_parse(Args* args, Array_t<Array_t<u8>> argv) {
                 puts(" (try --help)");
                 exit(1);
             }
-            for (const auto& entry : std::__fs::filesystem::directory_iterator("test")) {
-                myVector.push_back(entry.path());
-            } 
             args->instance = arg;
             instance_set = true;
             state = 0;
@@ -374,9 +364,7 @@ int main(int argc, char** argv_) {
     Args args;
     args_parse(&args, argv);
 
-    for (auto& str : myVector) {
-        args.instance = array_create_str(str.c_str());
-        if (args.mode == Args::SOLVER or args.mode == Args::VERIFIER) {
+    if (args.mode == Args::SOLVER or args.mode == Args::VERIFIER) {
         Prover prover;
         defer { prover_free(&prover); };
         if (args.mode == Args::SOLVER) {
@@ -404,12 +392,7 @@ int main(int argc, char** argv_) {
         defer { verifier_free(&veri); };
         verifier_init(&veri, &prover, exprs, n_variables, args.verifier_flags);
         
-        str = str.substr(5);
-
-        std::ofstream outfile1(str+"_BDD.txt", std::ios::trunc);
-        std::ofstream outfile2(str+"_eval.txt", std::ios::trunc);
-        std::ofstream outfile3(str+"_CP.txt", std::ios::trunc);
-        s64 code = verifier_sumcheck(&veri, str);
+        s64 code = verifier_sumcheck(&veri);
         
         u64 time_duration_total = os_now();
 
@@ -418,39 +401,35 @@ int main(int argc, char** argv_) {
         } else {
             format_print("%d\n", code);
         }
-
-        // u128 test = 1<<32+1;
-        // printf("%ld", test);
         
-        // if (not args.no_stats) {
-        //     format_print("\nStatistics:\n");
-        //     format_print("  Instance size: .. %-10B\n", instance_size);
-        //     array_fwrite(stats_instance);
-        //     format_print("    QBC nodes:      %-10d\n", exprs.size);
-        //     format_print("      with degree:  %-10d\n", veri.exprs.size);
-        //     format_print("  Total time: ..... %-10T\n", time_duration_total);
-        //     format_print("    Verifier:       %-10T\n", veri.time_duration);
-        //     format_print("    Prover:         %-10T\n", prover.time_duration_calc + prover.time_duration_eval);
-        //     format_print("      calculate:    %-10T\n", prover.time_duration_calc);
-        //     format_print("      evaluate:     %-10T\n", prover.time_duration_eval);
-        //     format_print("  Bytes sent: ..... %-10B\n", prover.sizeDataSentToProver + prover.sizeDataToVerifier);
-        //     format_print("    To Prover:      %-10B\n", prover.sizeDataSentToProver);
-        //     format_print("    To Verifier:    %-10B\n", prover.sizeDataToVerifier);
-        //     if (args.mode == Args::SOLVER) {
-        //         Bdd_store* store = &prover.local.store;
-        //         format_print("  BDD store: ...... %-10B\n", store->size_store_max);
-        //         format_print("    Final nodes:    %-10d\n", store->bdds.size);
-        //         format_print("    Total nodes:    %-10d\n", store->nodes_store_max);
-        //     }
-        // }
-        
-        } else if (args.mode == Args::PROVER) {
-            Server server;
-            server_run(&server, args.host, args.port);
-            
-        } else {
-            assert_false;
+        if (not args.no_stats) {
+            format_print("\nStatistics:\n");
+            format_print("  Instance size: .. %-10B\n", instance_size);
+            array_fwrite(stats_instance);
+            format_print("    QBC nodes:      %-10d\n", exprs.size);
+            format_print("      with degree:  %-10d\n", veri.exprs.size);
+            format_print("  Total time: ..... %-10T\n", time_duration_total);
+            format_print("    Verifier:       %-10T\n", veri.time_duration);
+            format_print("    Prover:         %-10T\n", prover.time_duration_calc + prover.time_duration_eval);
+            format_print("      calculate:    %-10T\n", prover.time_duration_calc);
+            format_print("      evaluate:     %-10T\n", prover.time_duration_eval);
+            format_print("  Bytes sent: ..... %-10B\n", prover.sizeDataSentToProver + prover.sizeDataToVerifier);
+            format_print("    To Prover:      %-10B\n", prover.sizeDataSentToProver);
+            format_print("    To Verifier:    %-10B\n", prover.sizeDataToVerifier);
+            if (args.mode == Args::SOLVER) {
+                Bdd_store* store = &prover.local.store;
+                format_print("  BDD store: ...... %-10B\n", store->size_store_max);
+                format_print("    Final nodes:    %-10d\n", store->bdds.size);
+                format_print("    Total nodes:    %-10d\n", store->nodes_store_max);
+            }
         }
+        
+        return code == -1 ? 255 : 0;
+    } else if (args.mode == Args::PROVER) {
+        Server server;
+        server_run(&server, args.host, args.port);
+        
+    } else {
+        assert_false;
     }
-    return 0;
 }

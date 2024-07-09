@@ -1,43 +1,33 @@
 
 struct ffe {
 #ifndef FFE_SIMPLE
-    constexpr static u64 mod = 0xffffffff00000001; // Prime for the finite field
-    // constexpr static u64 mod_pow = 61; // mod = 2**mod_pow - 1
+    constexpr static u64 mod = 0x1fffffffffffffff; // Prime for the finite field
+    constexpr static u64 mod_pow = 61; // mod = 2**mod_pow - 1
 #else
     constexpr static u64 mod = 7;
     constexpr static u64 mod_pow = 3;
 #endif
     u64 x;
     constexpr ffe(): x{0} {}
-    constexpr ffe(u64 x_): x{x_} {x %= mod;}
     constexpr ffe(s32 x_): x{x_ < 0 ? x_ + mod : x_} {}
-    // constexpr ffe(s64 x_): x{0} {x_ %= (s64)mod; x = x_ < 0 ? x_+mod : x_;}
-
+    constexpr ffe(u64 x_): x{x_} {x %= mod;}
+    constexpr ffe(s64 x_): x{0} {x_ %= (s64)mod; x = x_ < 0 ? x_+mod : x_;}
 
     static constexpr ffe make_invalid() { ffe x; x.x = -1; return x; }
     bool is_invalid() { return x == (u64)-1; }
 
     //Implementing addition and substraction and multiplication in the finite field
-    ffe& operator+= (ffe y) {
-        // if (x/2 + y.x/2 >= 1<<63) x -= mod;
-        u64 gap = mod - x;
-        if (y.x >= gap) x = y.x - gap;
-        else x += y.x;
-        // if (x >= mod) x -= mod;
-        return *this;
-    }
-    ffe& operator-= (ffe y) { y.x > x? x = mod - y.x + x: x -= y.x; return *this; }
+    ffe& operator+= (ffe y) { x += y.x; if (x >= mod) x -= mod; return *this; }
+    ffe& operator-= (ffe y) { x -= y.x; if (x >  mod) x += mod; return *this; }
     ffe operator+ (ffe y) const { ffe z {*this}; z += y; return z; }
     ffe operator- (ffe y) const { ffe z {*this}; z -= y; return z; }
     
     ffe operator* (ffe y) const {
 #ifndef FFE_SIMPLE
         u128 z = (u128)x * y.x;
-        // u64 w = (z & mod) + (z >> mod_pow);
-        // if (w > mod) w -= mod;
-        // return w;
-        while (z > (u128)mod) z -= (u128)mod;
-        return (u64)z;
+        u64 w = (z & mod) + (z >> mod_pow);
+        if (w > mod) w -= mod;
+        return w;
 #else
         return (x * y.x) % mod;
 #endif
@@ -55,27 +45,24 @@ struct ffe {
             tmp = t_new; t_new = t - q * t_new; t = tmp;
             tmp = r_new; r_new = r - q * r_new; r = tmp;
         }
-        if (t > mod) t = t + mod;
-        ffe var1=ffe(t) * ffe(x);
-        printf("%llx 's inv: %llx\n", x, t);
-        return t;
+        return t > mod ? t + mod : t;
     }
     ffe operator/ (ffe y) const { return *this * y.inv(); }
     ffe& operator/= (ffe y) { *this *= y.inv(); return *this; }
 
-    // static ffe pow2(s64 exp) {
-    //     exp %= mod_pow;
-    //     if (exp < 0) exp += mod_pow;
-    //     ffe r;
-    //     r.x = 1ull << exp;
-    //     return r;
+    static ffe pow2(s64 exp) {
+        exp %= mod_pow;
+        if (exp < 0) exp += mod_pow;
+        ffe r;
+        r.x = 1ull << exp;
+        return r;
 
-    // }
+    }
 };
-// ffe operator+ (s32 x, ffe y) { return ffe{x} + y; }
-// ffe operator- (s32 x, ffe y) { return ffe{x} - y; }
-// ffe operator* (s32 x, ffe y) { return ffe{x} * y; }
-// ffe operator/ (s32 x, ffe y) { return ffe{x} / y; }
+ffe operator+ (s64 x, ffe y) { return ffe{x} + y; }
+ffe operator- (s64 x, ffe y) { return ffe{x} - y; }
+ffe operator* (s64 x, ffe y) { return ffe{x} * y; }
+ffe operator/ (s64 x, ffe y) { return ffe{x} / y; }
 
 struct Polynomial { // Defining the Ring F[X]/(X^3)
     ffe a,b,c; // a * x**2 + b * x + c
