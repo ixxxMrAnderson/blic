@@ -194,7 +194,9 @@ void bdd_print_one(Bdd_store* store, u32 node_it, Array_dyn<u8>* out) {
     }
 }
 
-void bdd_print(Bdd_store* store, Array_t<u8> path = {}) {
+void bdd_print(Bdd_store* store, std::string filestr, Array_t<u8> path = {}) {
+
+    std::ofstream outfile(filestr+"_BDD.txt", std::ios::app);
     Array_dyn<u8> out;
     Array_t<u64> freed = array_create<u64>((store->bdds.size + 63) / 64);
     defer {
@@ -206,16 +208,26 @@ void bdd_print(Bdd_store* store, Array_t<u8> path = {}) {
         bitset_set(&freed, i, true);
     }
     
-    array_printf(&out, "Bdd_store (%lld nodes)\n", store->bdds.size);
+    outfile << "Bdd_store " << store->bdds.size << std::endl;
     for (s64 node_it = 0; node_it < store->bdds.size; ++node_it) {
-        array_push_back(&out, (u8)" *"[bitset_get(freed, node_it)]);
-        bdd_print_one(store, node_it, &out);
-    }
-
-    if (path.size) {
-        array_write_to_file(path, out);
-    } else {
-        array_fwrite(out);
+        Bdd node = store->bdds[node_it];
+        
+        switch (node.type) {
+        case Bdd::FALSE:
+        case Bdd::TRUE:
+            outfile << node_it << " " << "FT"[node.type == Bdd::TRUE] << std::endl;
+            break;
+        case Bdd::NORMAL:
+            outfile << node_it << " N " << (int)node.var << " " << node.child0 << " " << node.child1 << std::endl;
+            break;
+        case Bdd::PRODUCT:
+            outfile << node_it << " P " << (int)node.var << " " << node.child0 << " " << node.child1 << " " << (int)node.type_arg << std::endl;
+            break;
+        case Bdd::LINK:
+            outfile << node_it << " L " << node.child0 << std::endl;
+            break;
+        default: assert_false;
+        }
     }
 }
 
@@ -662,12 +674,22 @@ void bdd_calculate_all(Bdd_store* store) {
     store->nodes_store_max = store->bdds.size - store->bdd_free.size + store->bdd_log.size;
 }
 
-Polynomial bdd_evaluate_node_old(Bdd_store* store, u32 root, Array_t<ffe> assignment) {
+Polynomial bdd_evaluate_node_old(Bdd_store* store, u32 root, Array_t<ffe> assignment, std::string filestr) {
+    // _evaluation_cache_free(&store->evaluation_cache);
     Array_dyn<u32> stack = store->evaluation_cache.low_stack;
     defer { store->evaluation_cache.low_stack = stack; };
 
     Hashmap<Polynomial> values = store->evaluation_cache.old_evaluate;
     defer { store->evaluation_cache.old_evaluate = values; };
+
+    bdd_print(store, filestr);
+    std::ofstream outfile(filestr+"_eval.txt", std::ios::app);
+    outfile << "BDD\n";
+    for (int i = 0; i < assignment.size; ++i) {
+        if (assignment[i].x == -1) outfile << "18446744069414584320 ";
+        else outfile << assignment[i].x << " ";
+    }
+    outfile << std::endl;
 
     // Slow:
     //     hashmap_set_empty(&values, -1);
@@ -681,7 +703,10 @@ Polynomial bdd_evaluate_node_old(Bdd_store* store, u32 root, Array_t<ffe> assign
     
     hashmap_set(&values, 0, Polynomial {0, 0, 0});
     hashmap_set(&values, 1, Polynomial {0, 0, 1});
-    if (auto* ptr = hashmap_getptr(&values, root)) return *ptr;
+    if (auto* ptr = hashmap_getptr(&values, root)) {
+        outfile << root << " hash " << ptr->a.x << " " << ptr->b.x << " " << ptr->c.x << std::endl;
+        return *ptr;
+    }
 
     array_push_back(&stack, root);
     while (stack.size) {
@@ -727,13 +752,22 @@ Polynomial bdd_evaluate_node_old(Bdd_store* store, u32 root, Array_t<ffe> assign
         if (not poly1) { array_push_back(&stack, node.child1); continue; }
 
         Polynomial poly;
+        outfile << node_it;
         if (node.type == Bdd::NORMAL) {
             ffe x = assignment[node.var];
+            // outfile << x.x << std::endl;
             if (x.is_invalid()) {
                 poly = *poly0 * Polynomial {0, -1, 1} + *poly1 * Polynomial {0, 1, 0};
             } else {
                 poly = *poly0 * Polynomial {0, 0, ffe{1} - x} + *poly1 * Polynomial {0, 0, x};
             }
+            outfile << " N ";
+            if (x.x == -1) outfile << "18446744069414584320 " ;
+            else outfile << x.x << " ";
+
+            outfile << poly.a.x << " " << poly.b.x << " " << poly.c.x;
+            outfile << " " << node.child0 << " " << poly0->a.x << " " << poly0->b.x << " " << poly0->c.x;
+            outfile << " " << node.child1 << " " << poly1->a.x << " " << poly1->b.x << " " << poly1->c.x << std::endl;
         } else if (node.type == Bdd::PRODUCT) {
             poly = {0, 0, 0};
             if (node.type_arg & 1) {
@@ -741,21 +775,28 @@ Polynomial bdd_evaluate_node_old(Bdd_store* store, u32 root, Array_t<ffe> assign
                 poly -= *poly0;
                 poly -= *poly1;
                 poly += *poly0 * *poly1;
+                printf("in 1, a=%d, b=%d, c=%d\n", poly.a.x, poly.b.x, poly.c.x);
             }
             if (node.type_arg & 2) {
+                printf("in 2\n");
                 poly += *poly0;
                 poly -= *poly0 * *poly1;
             }
             if (node.type_arg & 4) {
                 poly += *poly1;
                 poly -= *poly0 * *poly1;
+                printf("%d in 4, a=%d, b=%d, c=%d\n", node.type_arg, poly.a.x, poly.b.x, poly.c.x);
             }
             if (node.type_arg & 8) {
                 poly += *poly0 * *poly1;
             }
+            outfile << " P " << int(node.type_arg) << " " << poly.a.x << " " << poly.b.x << " " << poly.c.x;
+            outfile << " " << node.child0 << " " << poly0->a.x << " " << poly0->b.x << " " << poly0->c.x;
+            outfile << " " << node.child1 << " " << poly1->a.x << " " << poly1->b.x << " " << poly1->c.x << std::endl;
         } else {
             assert_false;
         }
+
         hashmap_set(&values, node_it, poly);
         if (node_it != node_it_orig) {
             hashmap_set(&values, node_it_orig, poly);
@@ -764,11 +805,13 @@ Polynomial bdd_evaluate_node_old(Bdd_store* store, u32 root, Array_t<ffe> assign
     }
 
     //printf("%6lld total, %6lld explored, %8lld iterations, %8lld deep iterations, %5.1f ns/iter\n", store->bdds.size, values.size, iterations, iterations2, (os_now() - begin) / (float)iterations);
-    
-    return hashmap_get(&values, root);
+    auto* ret = hashmap_getptr(&values, root);
+    outfile << "ret " << ret->a.x << " " << ret->b.x << " " << ret->c.x << std::endl;
+
+    return *ret;
 }
 
-Polynomial bdd_evaluate_expr_old(Bdd_store* store, u32 expr, Array_t<ffe> assignment) {
+Polynomial bdd_evaluate_expr_old(Bdd_store* store, u32 expr, Array_t<ffe> assignment, std::string filestr) {
     // Undo changes to the BDD
     auto r = store->expr_results[expr];
     while (store->bdd_log.size > r.log) {
@@ -777,7 +820,7 @@ Polynomial bdd_evaluate_expr_old(Bdd_store* store, u32 expr, Array_t<ffe> assign
         --store->bdd_log.size;
     }
     assert(store->bdd_log.size == r.log);
-    return bdd_evaluate_node_old(store, r.bdd, assignment);
+    return bdd_evaluate_node_old(store, r.bdd, assignment, filestr);
 }
 
 void _bdd_evaluation_cache_print(Bdd_store* store) {
@@ -849,12 +892,12 @@ ffe _bdd_evaluate_node_low(Bdd_store* store, u32 root_it) {
         ffe val;
         if (node.type == Bdd::NORMAL) {
             ffe x = ec->assignment[node.var];
-            val = (1 - x) * *child0 + x * *child1;
+            val = (ffe{1} - x) * *child0 + x * *child1;
         } else if (node.type == Bdd::PRODUCT) {
             Coeff_2d coeff = expr_op_coefficients_get(node.type_arg);
-            val = coeff.c[0];
-            val += coeff.c[1] * *child0;
-            val += (coeff.c[2] + coeff.c[3] * *child0) * *child1;
+            val = ffe{coeff.c[0]};
+            val += ffe{coeff.c[1]} * *child0;
+            val += (ffe{coeff.c[2]} + ffe{coeff.c[3]} * *child0) * *child1;
         } else {
             assert_false;
         }
@@ -893,12 +936,12 @@ Polynomial _linear_op(u8 op, Evaluation_cache::Linear p, Evaluation_cache::Linea
     
     Coeff_2d coeff = expr_op_coefficients_get(op);
     Evaluation_cache::Linear c3p_c2;
-    c3p_c2.b = coeff.c[3] * p.b + coeff.c[2];
-    c3p_c2.a = coeff.c[3] * p.a;
+    c3p_c2.b = ffe{coeff.c[3]} * p.b + ffe{coeff.c[2]};
+    c3p_c2.a = ffe{coeff.c[3]} * p.a;
 
     Polynomial r = c3p_c2 * q;
-    r.c += coeff.c[1] * p.b + coeff.c[0];
-    r.b += coeff.c[1] * p.a;
+    r.c += ffe{coeff.c[1]} * p.b + ffe{coeff.c[0]};
+    r.b += ffe{coeff.c[1]} * p.a;
     return r;
 }
 
@@ -947,7 +990,7 @@ Polynomial bdd_evaluate_node(Bdd_store* store, u32 root) {
                 // Can transfer coefficients to children, do that
                 assert(node.var == var);
                 ffe x = ec->assignment[node.var];
-                _bdd_frontier_update(store, key_next, &var_next, node.child0, node_fac * (1-x));
+                _bdd_frontier_update(store, key_next, &var_next, node.child0, node_fac * (ffe{1}-x));
                 _bdd_frontier_update(store, key_next, &var_next, node.child1, node_fac * x);
                 
             } else if (node.type == Bdd::LINK and node.var >= var) {
@@ -1051,7 +1094,7 @@ void _bdd_assignment_load(Bdd_store* store, u32 expr, u32 assignment, s64* mark_
     }
 }
 
-Polynomial bdd_evaluate_expr(Bdd_store* store, u32 expr, u32 assignment) {
+Polynomial bdd_evaluate_expr(Bdd_store* store, u32 expr, u32 assignment, std::string filestr) {
     auto* ec = &store->evaluation_cache;
 
     s64 mark_low  = store->n_vars; // discard the low cache above this variable
@@ -1116,7 +1159,7 @@ Polynomial bdd_evaluate_expr(Bdd_store* store, u32 expr, u32 assignment) {
     }
     if (store->debug_flags & Bdd_store::DEBUG_CHECK_EVAL) {
         auto result0 = bdd_evaluate_node(store, r.bdd);
-        auto result1 = bdd_evaluate_node_old(store, r.bdd, ec->assignment);
+        auto result1 = bdd_evaluate_node_old(store, r.bdd, ec->assignment, filestr);
         if (result0 != result1) {
             printf("Evaluation result mismatch detected!\n");
             printf("    fast  algorithm: ");

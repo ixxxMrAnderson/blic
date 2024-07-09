@@ -144,27 +144,20 @@ void before_evaluating(Array_dyn<Assignment> assignments, Array_t<ffe> temp_assi
     }
 }
 
-Polynomial prover_evaluate(Prover* prover_, u32 expr, u32 assignment) {
+Polynomial prover_evaluate(Prover* prover_, u32 expr, u32 assignment, std::string filestr) {
     u64 begin = os_now();
     Polynomial result;
     
-    if (prover_->type == Prover::LOCAL) {
-        auto prover = &prover_->local;
-        result = bdd_evaluate_expr(&prover->store, expr, assignment);
-        
-    } else if (prover_->type == Prover::NETWORK) {
-        Prover_network* prover = &prover_->network;
-        Message newmsg{MessageType::evaluating, expr, assignment, 0, 0};
-        prover->msg = newmsg;
-        size_t len {sizeof(newmsg)};
-        send(prover->clientSd, &(prover->msg), len, 0);
-        //send(prover->clientSd, assignment.data, assignment.size * sizeof(ffe),0);
-        recv(prover->clientSd, (Polynomial*)&(prover->res), sizeof(Polynomial),0);
-        result = prover->res;
-        
-    } else {
-        assert_false;
-    }
+    auto prover = &prover_->local;
+    auto* ec = &prover->store.evaluation_cache;
+
+    s64 mark_low  = prover->store.n_vars; // discard the low cache above this variable
+    s64 mark_high = 1; // discard the high cache below this variable
+
+    // Load the new assignment, compute changes
+    _bdd_assignment_load(&prover->store, expr, assignment, &mark_low, &mark_high);
+    
+    result = bdd_evaluate_expr_old(&prover->store, expr, ec->assignment, filestr);
     
     prover_->time_duration_eval += os_now() - begin;
     prover_->sizeDataSentToProver += sizeof(expr) + sizeof(assignment);

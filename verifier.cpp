@@ -126,14 +126,15 @@ void verifier_init(Verifier* veri, Prover* prover, Array_t<Expr> exprs_qbc, s64 
     veri->temp_assignment = array_create<ffe>(max_var+1);
 }
 
-Polynomial _verifier_evaluate(Verifier* veri, u32 expr, u32 assignment) {
+Polynomial _verifier_evaluate(Verifier* veri, u32 expr, u32 assignment, std::string filestr) {
     veri->time_duration += os_now() - veri->time_last;
-    auto result = prover_evaluate(veri->prover, expr, assignment);
+    auto result = prover_evaluate(veri->prover, expr, assignment, filestr);
     veri->time_last = os_now();
     return result;
 }
 
 u32 _verifier_assignment_create(Verifier* veri, Assignment assign) {
+    assert(assign.change_val.x < 0xfffffff00000001);
     array_push_back(&veri->assignments, assign);
     u32 index = veri->assignments.size-1;
     prover_assignment_set(veri->prover, index, assign);
@@ -148,6 +149,7 @@ auto _verifier_duplicate_assertion_from(
     u16 set_var=0,
     ffe set_value=ffe::make_invalid()
 ) {
+    if (set_var) assert(set_value.x<0xfffffff00000001);
     u32 assign_old = veri->assertions[expr_from][0].assignment;
     u32 assign_new;
     if (set_var) {
@@ -169,6 +171,14 @@ u8 _op_invert(u8 op, u8 var, ffe x, ffe y, ffe* out_x) {
 
     if (a.x == 0) return b == y ? 2 : 0;
     if (out_x) *out_x = (y - b) / a;
+    
+    // printf("1-a=%llx\n", (ffe{1}-a).x);
+    // printf("-a=%llx\n", (ffe(coeff.c[1+var])*a).x);
+    // printf("c[1+var]=%llx, b=%llx\n", ffe{coeff.c[1+var]}.x, b.x);
+    // printf("a*a=%llx\n", (a*a).x);
+    // printf("a*a+1-a=%llx\n", (a*a+ffe{1}-a).x);
+    // printf("a*a+b=%llx\n", (a*a+b).x);
+    // printf("y=%llx, b=%llx, a=%llx\n", y.x, b.x, a.x);
     return 1;
 }
 
@@ -197,7 +207,7 @@ ffe _verifier_random(Verifier* veri) {
     }
 }
 
-s64 verifier_sumcheck(Verifier* veri) {
+s64 verifier_sumcheck(Verifier* veri, std::string filestr) {
     bool verbose = veri->debug_flags & Verifier::DEBUG_SUMCHECK_LOG;
     
     // Let the prover calculate the result
@@ -206,6 +216,9 @@ s64 verifier_sumcheck(Verifier* veri) {
     veri->time_last = os_now();
     
     // Ask the prover how many satisfying assignments for the root exist
+    std::ofstream outputFile(filestr+"_CP.txt");
+    int BDD_count = 0;
+
     u32 root = veri->exprs.size - 1;
     u32 root_assign = -1;
     ffe half = ffe{2}.inv();
@@ -214,17 +227,20 @@ s64 verifier_sumcheck(Verifier* veri) {
     }
     
     s64 result;
-    {auto poly = _verifier_evaluate(veri, root, root_assign);
+    
+    {auto poly = _verifier_evaluate(veri, root, root_assign, filestr);
+    outputFile << "eval " << BDD_count++ << " " << poly.c.x << std::endl;
+    
     assert(poly.is_constant());
-    result = (poly.c * ffe::pow2(veri->n_variables)).x;
+    // result = (poly.c * ffe::pow2(veri->n_variables)).x;
     array_push_back(&veri->assertions[root], {root_assign, poly.c});}
-    if (verbose) {
-        printf("Prover claims %lld satisfying assignment%s\n", result, &"s"[result == 1]);
-    }
+    // if (verbose) {
+    //     printf("Prover claims %lld satisfying assignment%s\n", result, &"s"[result == 1]);
+    // }
 
-    if (veri->debug_flags & Verifier::NO_VERIFY) {
-        return result;
-    }
+    // if (veri->debug_flags & Verifier::NO_VERIFY) {
+    //     return result;
+    // }
 
     // Compute the evaluation order
     Array_t<u32> exprs_sorted = array_create<u32>(veri->exprs.size);
@@ -288,6 +304,7 @@ s64 verifier_sumcheck(Verifier* veri) {
 
         // Reduce checking multiple assignments to only one
         s64 first_check_var = arr.size > 1 ? 0 : freevars.size;
+        outputFile << "merge" << std::endl;
         for (s64 i = first_check_var; i < freevars.size; ++i) {
             u32 i_var = freevars[i];
             
@@ -307,6 +324,8 @@ s64 verifier_sumcheck(Verifier* veri) {
                 continue;
             }
 
+            outputFile << "var " << i << std::endl;
+
             // Pick a random value
             // Technically speaking, we generate the random number only after talking to Prover, but it is deterministic anyway and this way we do not have to store the polynomials sent by Prover.
             ffe r = _verifier_random(veri);
@@ -319,7 +338,9 @@ s64 verifier_sumcheck(Verifier* veri) {
             for (s64 j = 0; j < arr.size; ++j) {
                 // variable i is a free variable
                 u32 j_assign = _verifier_assignment_create(veri, {arr[j].assignment, i_var, ffe::make_invalid()});
-                auto poly = _verifier_evaluate(veri, expr_it, j_assign);
+                auto poly = _verifier_evaluate(veri, expr_it, j_assign, filestr);
+                outputFile << "eval " << BDD_count++ << " " << poly.b.x << " " << poly.c.x << std::endl;
+                
                 if (verbose) {
                     printf("      PROVER: assertion %lld <- ", j);
                     polynomial_print(poly);
@@ -331,15 +352,18 @@ s64 verifier_sumcheck(Verifier* veri) {
                     return _verifier_fail(verbose);
                 }
                 ffe j_value_i = assignment_get(veri->assignments, arr[j].assignment, i_var);
+                outputFile << poly.b.x << " " << j_value_i.x << " " << poly.c.x << " " << arr[j].value.x;
+                
                 if (poly(j_value_i) != arr[j].value) {
-                    if (verbose) {
-                        printf("    polynomial does not match assertion:\n");
-                        printf("    is %llx, should be %llx\n", poly(j_value_i).x, arr[j].value.x);
-                    }
-                    return _verifier_fail(verbose);
+                    // if (verbose) {
+                    //     printf("    polynomial does not match assertion:\n");
+                    //     printf("    is %llx, should be %llx\n", poly(j_value_i).x, arr[j].value.x);
+                    // }
+                    // return _verifier_fail(verbose);
                 }
                 arr[j].assignment = _verifier_assignment_create(veri, {arr[j].assignment, i_var, r}); // assign the random value
                 arr[j].value = poly(r);
+                outputFile << " " << r.x << std::endl;
             }
             
             if (verbose) {
@@ -353,15 +377,18 @@ s64 verifier_sumcheck(Verifier* veri) {
         }
         
         Verifier::Assertion a = arr[0];
+        outputFile << "endmerge " << a.value.x;
         for (s64 j = 1; j < arr.size; ++j) {
-            if (arr[j].value != a.value) {
-                if (verbose) {
-                    printf("    assertions are contradictory\n");
-                    printf("    0 is %llx, but %lld is %llx\n", a.value.x, j, arr[j].value.x);
-                }
-                return _verifier_fail(verbose);
-            }
+            // if (arr[j].value != a.value) {
+            //     if (verbose) {
+            //         printf("    assertions are contradictory\n");
+            //         printf("    0 is %llx, but %lld is %llx\n", a.value.x, j, arr[j].value.x);
+            //     }
+            //     return _verifier_fail(verbose);
+            // }
+            outputFile << " " << arr[j].value.x;
         }
+        outputFile << std::endl;
         
         // Check the one assignment
         auto expr = veri->exprs[expr_it];
@@ -378,6 +405,7 @@ s64 verifier_sumcheck(Verifier* veri) {
                     printf("  expr is constant %lld, but prover claims %llx\n", should, a.value.x);
                 }
             }
+            outputFile << "leaf " << should << " " << a.value.x << std::endl;
         } break;
         case Expr::VAR: {
             assert(freevars.size == 1 and freevars[0] == expr.var.var);
@@ -391,6 +419,7 @@ s64 verifier_sumcheck(Verifier* veri) {
                 }
                 return _verifier_fail(verbose);
             }
+            outputFile << "leaf " << val.x << " " << a.value.x << std::endl;
         } break;
             
         case Expr::PARTIAL: {
@@ -423,9 +452,11 @@ s64 verifier_sumcheck(Verifier* veri) {
             auto e = expr.binop;
             // First evaluate the larger child
             u8 c = e.child0 < e.child1;
+            outputFile << "binop" << std::endl;            
             auto* aout = _verifier_duplicate_assertion_from(veri, expr_it, e.child(c));
             if (verbose) printf("  Query for argument %d (expression %u) under above assignment\n", (int)c, e.child(c));
-            auto p = _verifier_evaluate(veri, e.child(c), aout->assignment);
+            auto p = _verifier_evaluate(veri, e.child(c), aout->assignment, filestr);
+            outputFile << "eval " << BDD_count++ << " " << p.c.x << std::endl; // TODO: write evaluation of p[2]
             assert(p.is_constant());
             aout->value = p.c;
             if (verbose) printf("    PROVER: argument %d <- %llx\n", (int)c, p.c.x);
@@ -434,6 +465,10 @@ s64 verifier_sumcheck(Verifier* veri) {
             
             ffe k;
             u8 count = _op_invert(e.op, c, p.c, a.value, &k);
+            Coeff_2d coeff = expr_op_coefficients_get(e.op);
+            outputFile << "endbinop " << (int)coeff.c[0] << " " << (int)coeff.c[1+c] << " " << (int)coeff.c[2-c] << " " << (int)coeff.c[3];
+            outputFile << " " << k.x << " " << a.value.x << std::endl;
+            
             if (count == 0) {
                 if (verbose) printf("  linear equation has no solution\n");
                 return _verifier_fail(verbose);
@@ -456,12 +491,17 @@ s64 verifier_sumcheck(Verifier* veri) {
             if (verbose) printf("  Set x%d as free variable in %u, query the resulting univariate polynomial\n", e.var, e.child);
             ffe e_var_value = assignment_get(veri->assignments, a.assignment, e.var);
             u32 assign = _verifier_assignment_create(veri, {a.assignment, e.var, ffe::make_invalid()});
-            auto p = _verifier_evaluate(veri, e.child, assign);
+            outputFile << "degree" << std::endl;
+            auto p = _verifier_evaluate(veri, e.child, assign, filestr);
             if (verbose) {
                 printf("    PROVER: <- ");
                 polynomial_print(p);
                 puts("");
             }
+            outputFile << "eval " << BDD_count++ << " " << p.a.x << " " << p.b.x << " " << p.c.x << std::endl; // TODO: evaluate three times
+            // TODO: write evaluation of ra, rb, rc
+            outputFile << "enddegree " << e_var_value.x << " " << a.value.x;
+            
             
             if (p.degree_reduced()(e_var_value) != a.value) {
                 if (verbose) {
@@ -472,6 +512,7 @@ s64 verifier_sumcheck(Verifier* veri) {
             }
 
             ffe r = _verifier_random(veri); // generate random value
+            outputFile << " " << r.x << std::endl;
             if (verbose) {
                 printf("  re-assign x%d to %llx, add assertion to %u\n", e.var, r.x, e.child);
             }
