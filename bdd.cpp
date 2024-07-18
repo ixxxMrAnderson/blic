@@ -775,17 +775,17 @@ Polynomial bdd_evaluate_node_old(Bdd_store* store, u32 root, Array_t<ffe> assign
                 poly -= *poly0;
                 poly -= *poly1;
                 poly += *poly0 * *poly1;
-                printf("in 1, a=%d, b=%d, c=%d\n", poly.a.x, poly.b.x, poly.c.x);
+                // printf("in 1, a=%d, b=%d, c=%d\n", poly.a.x, poly.b.x, poly.c.x);
             }
             if (node.type_arg & 2) {
-                printf("in 2\n");
+                // printf("in 2\n");
                 poly += *poly0;
                 poly -= *poly0 * *poly1;
             }
             if (node.type_arg & 4) {
                 poly += *poly1;
                 poly -= *poly0 * *poly1;
-                printf("%d in 4, a=%d, b=%d, c=%d\n", node.type_arg, poly.a.x, poly.b.x, poly.c.x);
+                // printf("%d in 4, a=%d, b=%d, c=%d\n", node.type_arg, poly.a.x, poly.b.x, poly.c.x);
             }
             if (node.type_arg & 8) {
                 poly += *poly0 * *poly1;

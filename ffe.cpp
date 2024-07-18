@@ -57,7 +57,7 @@ struct ffe {
         }
         if (t > mod) t = t + mod;
         ffe var1=ffe(t) * ffe(x);
-        printf("%llx 's inv: %llx\n", x, t);
+        // printf("%llx 's inv: %llx\n", x, t);
         return t;
     }
     ffe operator/ (ffe y) const { return *this * y.inv(); }

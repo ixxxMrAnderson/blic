@@ -374,8 +374,11 @@ int main(int argc, char** argv_) {
     Args args;
     args_parse(&args, argv);
 
-    // for (auto& str : myVector) {
-        // args.instance = array_create_str(str.c_str());
+    for (auto& str : myVector) {
+        printf(str.c_str());
+        const char * substr = ".DS_Store";
+        if (std::strstr(str.c_str(), substr) != nullptr) continue;
+        args.instance = array_create_str(str.c_str());
         if (args.mode == Args::SOLVER or args.mode == Args::VERIFIER) {
         Prover prover;
         defer { prover_free(&prover); };
@@ -404,7 +407,7 @@ int main(int argc, char** argv_) {
         defer { verifier_free(&veri); };
         verifier_init(&veri, &prover, exprs, n_variables, args.verifier_flags);
         
-        std::string str = "";
+        str = str.substr(5);
 
         std::ofstream outfile1(str+"_BDD.txt", std::ios::trunc);
         std::ofstream outfile2(str+"_eval.txt", std::ios::trunc);
@@ -451,6 +454,6 @@ int main(int argc, char** argv_) {
         } else {
             assert_false;
         }
-    // }
+    }
     return 0;
 }
