@@ -4,6 +4,7 @@ use std::ffi::CString;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::mem;
+use std::time::{Duration, Instant};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 use anyhow::Result;
@@ -487,16 +488,16 @@ fn main() -> Result<()> {
         "test/BEQ-N-3.qdimacs_", // 4300
         // "test/BEQ-N-4.qdimacs_",
         // "test/BEQ-N-5.qdimacs_",
-        "test/CR-N-3.qdimacs_", // 1100
+        "test/CR-N-3.qdimacs_", // 1100 14509MB node:256 #135
         "test/CR-N-4.qdimacs_", // 2200
         "test/CR-N-5.qdimacs_", // 4300
-        "test/EQ-N-3.qdimacs_", // 1200
+        "test/EQ-N-3.qdimacs_", // 1200 3756MB node:104 #104
         "test/EQ-N-4.qdimacs_", // 2300
         "test/EQ-N-5.qdimacs_", // 2300
         // "test/EQ-N-8.qdimacs_",
         // "test/EQ-N-10.qdimacs_",
         // "test/EQ2-N-3.qdimacs_", // 8400
-        "test/KBKF_LD-N-3.qdimacs_", // 1200
+        "test/KBKF_LD-N-3.qdimacs_", // 1200 33476MB node:328 #241
         "test/KBKF_LD-N-4.qdimacs_", // 4200
         // "test/KBKF_LD-N-5.qdimacs_",
         "test/KBKF_QU-N-3.qdimacs_", // 2300
@@ -504,22 +505,22 @@ fn main() -> Result<()> {
         // "test/KBKF_QU-N-5.qdimacs_",
         // "test/KBKF_QU-N-8.qdimacs_",
         "test/KBKF-N-3.qdimacs_", // 2300
-        "test/KBKF-N-4.qdimacs_", // 600
-        "test/KBKF-N-5.qdimacs_", // 1200
+        "test/KBKF-N-4.qdimacs_", // 600 4151MB node:165 #224
+        "test/KBKF-N-5.qdimacs_", // 1200 23129MB node:222 #312
         "test/KBKF-N-8.qdimacs_", // 2100
         "test/KBKF-N-10.qdimacs_", // 2100
-        "test/LONSING-N-3.qdimacs_", // 1100
+        "test/LONSING-N-3.qdimacs_", // 1100 21944MB node:265 #211
         "test/LONSING-N-4.qdimacs_", // 2300
-        "test/LQ_PARITY-N-4.qdimacs_", // 1200
+        "test/LQ_PARITY-N-4.qdimacs_", // 1200 22099MB node:285 #182
         "test/LQ_PARITY-N-5.qdimacs_", // 2300
         "test/LQ_PARITY-N-8.qdimacs_", // 2300
-        "test/PARITY-N-3.qdimacs_", // 600
-        "test/PARITY-N-4.qdimacs_", // 600
-        "test/PARITY-N-5.qdimacs_", // 1300
+        "test/PARITY-N-3.qdimacs_", // 600 1076MB node:88 #76
+        "test/PARITY-N-4.qdimacs_", // 600 2246MB node:130 #101
+        "test/PARITY-N-5.qdimacs_", // 1300 7533MB node:178 #66
         "test/PARITY-N-8.qdimacs_", // 2300
         "test/PARITY-N-10.qdimacs_", // 2300
         "test/PARITY-N-15.qdimacs_", // 4300
-        "test/QU_PARITY-N-3.qdimacs_", // 1200
+        "test/QU_PARITY-N-3.qdimacs_", // 1400 22275MB node:292 #156
         "test/QU_PARITY-N-4.qdimacs_", // 2300
         "test/QU_PARITY-N-5.qdimacs_" // 2300
     ];
@@ -530,7 +531,7 @@ fn main() -> Result<()> {
                                   2300, 2300, 4300, 1200, 2300, 2300];
                                   
 
-    let str = "test/BEQ-N-3.qdimacs_";
+    let str = "test/PARITY-N-3.qdimacs_";
     let BDD_str = format!("{}{}", str, "BDD.txt");
     let eval_str = format!("{}{}", str, "eval.txt");
     let CP_str = format!("{}{}", str, "CP.txt");
@@ -565,17 +566,6 @@ fn main() -> Result<()> {
     while CP_index < CP_buffer.len() {
         let line = &CP_buffer[CP_index];
         if line.starts_with("eval") {
-            // let tokens: Vec<&str> = line.split_whitespace().collect();
-            // let BDD_index: usize = tokens[1].parse()?;
-            // let BDD_eval: u64 = tokens[2].parse()?;
-            // let index_target = builder.add_virtual_target();
-            // let eval_target = builder.add_virtual_target();
-            // builder.register_public_input(index_target);
-            // builder.register_public_input(eval_target);
-            // pw.set_target(index_target, F::from_canonical_usize(3*BDD_index+2));
-            // pw.set_target(eval_target, F::from_noncanonical_u64(BDD_eval));
-            // let var_out = random_access(&mut builder, index_target, &vec_target);
-            // builder.connect(var_out, eval_target);
             CP_index += 1;
         } else if line.starts_with("merge") {
             while !CP_buffer[CP_index].starts_with("end") {
@@ -583,62 +573,8 @@ fn main() -> Result<()> {
             }
             CP_index += 1;
         } else if line.starts_with("binop") {
-            // let tokens_1: Vec<&str> = CP_buffer[CP_index+1].split_whitespace().collect();
-            // let tokens_2: Vec<&str> = CP_buffer[CP_index+2].split_whitespace().collect();
-            // let x_: u64 = tokens_1[2].parse()?;
-            // let c1: i64 = tokens_2[1].parse()?;
-            // let c2: i64 = tokens_2[2].parse()?;
-            // let c3: i64 = tokens_2[3].parse()?;
-            // let c4: i64 = tokens_2[4].parse()?;
-            // let out_x_: u64 = tokens_2[5].parse()?;
-            // let y_: u64 = tokens_2[6].parse()?;
-            // let x_target = builder.add_virtual_target();
-            // let c1_target = builder.add_virtual_target();
-            // let c2_target = builder.add_virtual_target();
-            // let c3_target = builder.add_virtual_target();
-            // let c4_target = builder.add_virtual_target();
-            // let out_x_target = builder.add_virtual_target();
-            // let y_target = builder.add_virtual_target();
-            // pw.set_target(x_target, F::from_canonical_u64(x_));
-            // pw.set_target(c1_target, F::from_noncanonical_i64(c1));
-            // pw.set_target(c2_target, F::from_noncanonical_i64(c2));
-            // pw.set_target(c3_target, F::from_noncanonical_i64(c3));
-            // pw.set_target(c4_target, F::from_noncanonical_i64(c4));
-            // pw.set_target(out_x_target, F::from_canonical_u64(out_x_));
-            // pw.set_target(y_target, F::from_canonical_u64(y_));
-            // let tmp1 = builder.mul(c2_target, x_target);
-            // let b = builder.add(c1_target, tmp1);
-            // let tmp2 = builder.mul(c4_target, x_target);
-            // let a = builder.add(c3_target, tmp2);
-            // let tmp3 = builder.mul(out_x_target, a);
-            // let tmp4 = builder.add(tmp3, b);
-            // let tmp5 = builder.sub(tmp4, y_target);
-            // let tmp6 = builder.mul(tmp5, a);
-            // let zero_ = builder.constant(F::ZERO);
-            // builder.connect(tmp6, zero_);
             CP_index += 3;
         } else if line.starts_with("degree") {
-            // let tokens_1: Vec<&str> = CP_buffer[CP_index+1].split_whitespace().collect();
-            // let tokens_2: Vec<&str> = CP_buffer[CP_index+2].split_whitespace().collect();
-            // let p_a: u64 = tokens_1[2].parse()?;
-            // let p_b: u64 = tokens_1[3].parse()?;
-            // let p_c: u64 = tokens_1[4].parse()?;
-            // let r_: u64 = tokens_2[1].parse()?;
-            // let y_: u64 = tokens_2[2].parse()?;
-            // let pa_target = builder.add_virtual_target();
-            // let pb_target = builder.add_virtual_target();
-            // let pc_target = builder.add_virtual_target();
-            // let r_target = builder.add_virtual_target();
-            // let y_target = builder.add_virtual_target();
-            // pw.set_target(pa_target, F::from_noncanonical_u64(p_a));
-            // pw.set_target(pb_target, F::from_noncanonical_u64(p_b));
-            // pw.set_target(pc_target, F::from_noncanonical_u64(p_c));
-            // pw.set_target(r_target, F::from_noncanonical_u64(r_));
-            // pw.set_target(y_target, F::from_noncanonical_u64(y_));
-            // let tmp1 = builder.add(pa_target, pb_target);
-            // let tmp2 = builder.mul(tmp1, r_target);
-            // let tmp3 = builder.add(tmp2, pc_target);
-            // builder.connect(tmp3, y_target);
             CP_index += 3;
         } else if line.starts_with("leaf") {
             let tokens: Vec<&str> = line.split_whitespace().collect();
@@ -657,7 +593,10 @@ fn main() -> Result<()> {
     // println!("out\n");
 
     let data = builder.build::<C>();
+    let prove_start = Instant::now();
     let proof = data.prove(pw)?;
+    let prove_duration = prove_start.elapsed();
+    println!("Proving time elapsed: {:?}", prove_duration);
     let letters = CString::new("stats.resident").unwrap();
     let p_letters: *const c_char = letters.as_ptr() as *const c_char;
     let layout = Layout::new::<u64>();
@@ -674,11 +613,23 @@ fn main() -> Result<()> {
         // Print the value stored in the pointer
         println!("Value at allocated memory: {} MB, #BDD nodes: {}, #BDD proved: {}", *u64_ptr/1024/1024, GLOBAL_BDD_size, GLOBAL_BDD_num);
     }
-    data.verify(proof)
+    
+    let verify_start = Instant::now();
+    let ret = data.verify(proof);
+    let verify_duration = verify_start.elapsed();
+    println!("Verification time elapsed: {:?}", verify_duration);
+    ret
 }
 
 // BDD size (#node) // #BDD // circuit width // memory resident
-// 16               // 6    // 256           // 44MB
-// 61               // 4    // 512           // 146MB
-// 128              // 26   // 1024          // 1983MB 
-// 191              // 60   // 2048          // 12267MB
+// 165              // 224  // 600           // 4.05GB
+// 88               // 76   // 600           // 1.05GB
+// 130              // 101  // 600           // 2.19GB
+// 265              // 211  // 1100          // 21.43GB
+// 328              // 241  // 1200          // 32.69GB
+// 256              // 135  // 1300          // 14.17GB
+// 104              // 104  // 1300          // 3.67GB
+// 222              // 312  // 1300          // 22.59GB
+// 285              // 182  // 1300          // 21.58GB
+// 178              // 66   // 1300          // 7.36GB
+// 292              // 156  // 1400          // 21.75GB
